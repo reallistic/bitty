@@ -4,14 +4,14 @@ Bitty
 
 # Installation
 
-```
+```sh
 pip install -e .
 ```
 
 
 # Running
 
-```
+```sh
 python -m bitty.consumer
 ```
 
@@ -22,7 +22,7 @@ Each exchange should implement the `BaseConsumer` class in bitty/consumers/base.
 
 for example:
 
-```
+```python
 class MyFancyExchangeConsumer(BaseConsumer):
 
     url = 'websocket url'

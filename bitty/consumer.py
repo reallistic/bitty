@@ -36,7 +36,7 @@ def consume(loop=None):
     return threads
 
 
-if __name__ == '__main__':
+def main():
     loggers.setup()
     loop = asyncio.get_event_loop()
     threads = consume(loop=loop)
@@ -50,3 +50,7 @@ if __name__ == '__main__':
 
         loop.run_until_complete(asyncio.gather(*cos, loop=loop))
         loop.stop()
+
+
+if __name__ == '__main__':
+    main()

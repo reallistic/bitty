@@ -4,15 +4,17 @@ Bitty
 
 # Installation
 
-```sh
+```
 pip install -e .
 ```
 
 
 # Running
 
-```sh
-python -m bitty.consumer
+```
+LOG_LEVEL=info python -m bitty.consumer
+# or
+LOG_LEVEL=info bitty
 ```
 
 
@@ -22,7 +24,7 @@ Each exchange should implement the `BaseConsumer` class in bitty/consumers/base.
 
 for example:
 
-```python
+```
 class MyFancyExchangeConsumer(BaseConsumer):
 
     url = 'websocket url'

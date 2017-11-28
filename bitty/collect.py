@@ -17,7 +17,7 @@ PRODUCT_PAIRS = (
     ['LTC-BTC']
 )
 
-def consume(loop=None):
+def collect(loop=None):
     if loop is None:
         loop = asyncio.get_event_loop()
 
@@ -39,7 +39,7 @@ def consume(loop=None):
 def main():
     loggers.setup()
     loop = asyncio.get_event_loop()
-    threads = consume(loop=loop)
+    threads = collect(loop=loop)
     try:
         loop.run_forever()
     except KeyboardInterrupt:

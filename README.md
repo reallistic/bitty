@@ -12,7 +12,7 @@ pip install -e .
 # Running
 
 ```
-LOG_LEVEL=info python -m bitty.consumer
+LOG_LEVEL=info python -m bitty.collect
 # or
 LOG_LEVEL=info bitty
 ```
@@ -56,7 +56,7 @@ class MyFancyExchangeConsumer(BaseConsumer):
 
 # Enabling more pairs/exchanges
 
-This is currently done manually in bitty/consumer.py
+This is currently done manually in bitty/collect.py
 
 
 # NOTES

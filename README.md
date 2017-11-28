@@ -29,8 +29,11 @@ class MyFancyExchangeConsumer(BaseConsumer):
 
     url = 'websocket url'
     enable_heartbeat = False # True if this exchange supports heartbeat messages
+    exchange_name = 'MyFancyExchange' # Used for logging and callbacks
 
-    def on_trade(self, trade):
+    def _on_trade(self, trade):
+        # Call super so callbacks get called
+        super()._on_trade(trade)
         # We got a trade, do what you wish with it
         pass
 
@@ -52,6 +55,15 @@ class MyFancyExchangeConsumer(BaseConsumer):
         # This will be sent directly to the websocket to subscribe for heartbeats
         pass
 ```
+
+Callbacks can be added as well:
+def foo(trade):
+    pass
+
+consumer = MyFancyExchangeConsumer()
+consumer.on_trade(foo)
+```
+
 
 
 # Enabling more pairs/exchanges

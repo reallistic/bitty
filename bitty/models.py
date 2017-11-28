@@ -14,11 +14,15 @@ class Message:
     sequence = 0
     type = ''
     product = None
+    exchange_name = ''
 
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+    def to_json(self):
+        return self.__dict__.copy()
 
 
 class HeartbeatMessage(Message):

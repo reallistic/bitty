@@ -32,8 +32,10 @@ SUBSCRIBE_MSG = {
 class GdaxConsumer(BaseConsumer):
     enable_heartbeat = True
     url = 'wss://ws-feed.gdax.com'
+    exchange_name = 'gdax'
 
-    def on_trade(self, trade):
+    def _on_trade(self, trade):
+        super()._on_trade(trade)
         icon = '📈' if trade.side == 'sell' else '📉'
         logger.info('%s :: %s :: %s %s%s   %s %s', self.product_ids,
                     trade.product_id, trade.size,

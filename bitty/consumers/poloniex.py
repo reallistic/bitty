@@ -31,12 +31,14 @@ SUBSCRIBE_MSG = {
 class PoloniexConsumer(BaseConsumer):
     enable_heartbeat = False
     url = 'wss://api.poloniex.com'
+    exchange_name = 'Poloniex'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.wamp = WAMPClient(self.url)
 
-    def on_trade(self, trade):
+    def _on_trade(self, trade):
+        super()._on_trade(trade)
         icon = '📈' if trade.side == 'sell' else '📉'
         logger.info('%s :: %s :: %s %s%s   %s %s', self.product_ids,
                     trade.product_id, trade.size,
@@ -71,6 +73,7 @@ class PoloniexConsumer(BaseConsumer):
 
 
     async def on_welcome(self):
+        logger.info('wamp start on welcome')
         await self.spawn_keepalive()
 
     async def consume(self):
@@ -89,6 +92,7 @@ class PoloniexConsumer(BaseConsumer):
         self.wamp.on_welcome(self.on_welcome)
 
         try:
+            logger.info('starting wamp session')
             await self.wamp.start(session)
         except CancelledError:
             raise

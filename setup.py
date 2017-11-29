@@ -50,7 +50,7 @@ setup(
     # What does your project relate to?
     keywords='gdax poloniex websocket trading bitcoin ethereum',
 
-    packages=['bitty'],
+    packages=find_packages(),
 
     install_requires=['ujson', 'aiohttp', 'autobahn'],
 

@@ -262,6 +262,22 @@ class BaseConsumer:
             else:
                 self.on_trade_callback(trade)
 
+    def is_connected(self):
+        # Haven't consumed yet
+        if not self.ws:
+            return False
+        if self.ws.closed:
+            return False
+        return True
+
+    def get_status(self):
+        return dict(
+            heartbeats=self.last_heartbeat,
+            enable_ws_heartbeat=self.enable_heartbeat,
+            connected=self.is_connected()
+        )
+
+
     def on_heartbeat(self, msg):
         raise NotImplementedError('must implement it')
 

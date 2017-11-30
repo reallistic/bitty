@@ -5,8 +5,10 @@ from bitty import loggers
 from bitty.consumers.gdax import GdaxConsumer
 from bitty.consumers.poloniex import PoloniexConsumer
 
-logger = logging.getLogger(__name__)
-
+if __name__ == '__main__':
+    logger = logging.getLogger('bitty')
+else:
+    logger = logging.getLogger(__name__)
 
 
 PRODUCT_PAIRS = (
@@ -16,6 +18,7 @@ PRODUCT_PAIRS = (
     ['LTC-USD'],
     ['LTC-BTC']
 )
+
 
 def collect(loop=None):
     if loop is None:

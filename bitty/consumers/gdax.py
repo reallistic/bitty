@@ -34,17 +34,6 @@ class GdaxConsumer(BaseConsumer):
     url = 'wss://ws-feed.gdax.com'
     exchange_name = 'gdax'
 
-    def _on_trade(self, trade):
-        super()._on_trade(trade)
-        icon = '📈' if trade.side == 'sell' else '📉'
-        logger.info('%s :: %s :: %s %s%s   %s %s', self.product_ids,
-                    trade.product_id, trade.size,
-                    trade.price, icon, trade.trade_id, trade.time)
-
-    def on_heartbeat(self, message):
-        logger.info('%s :: heartbeat :: %s %s', self.product_ids,
-                    message.last_trade_id, message.time)
-
     def process_message(self, message):
         try:
             msg_data = json_loads(message)

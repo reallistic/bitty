@@ -100,6 +100,7 @@ class WAMPClient:
                 return
 
             hello = message.Hello(self.realm, self.roles)
+            logger.info('sending wamp hello')
             self.send(hello)
 
             async for ws_msg in ws:

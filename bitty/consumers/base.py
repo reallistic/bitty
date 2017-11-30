@@ -23,7 +23,6 @@ class BaseConsumer:
     keepalive = None
     trade_keepalive = None
     consumer = None
-    on_trade_callback = None
     exhange_name = ''
     ws = None
 
@@ -32,6 +31,9 @@ class BaseConsumer:
         self.loop = loop
 
         self.last_heartbeat = {}
+
+        self.on_trade_callbacks = []
+        self.on_heartbeat_callbacks = []
 
         if url is not None:
             self.url = url
@@ -242,7 +244,7 @@ class BaseConsumer:
 
             if isinstance(msg, models.HeartbeatMessage):
                 self.collect_heartbeat('heartbeat', msg.last_trade_id)
-                self.on_heartbeat(msg)
+                self._on_heartbeat(msg)
             elif isinstance(msg, models.MatchMessage):
                 msg_data['type'] = 'trade'
                 trade_msg = models.from_json(msg_data)
@@ -253,14 +255,26 @@ class BaseConsumer:
                 self._on_trade(msg)
 
     def on_trade(self, callback):
-        self.on_trade_callback = callback
+        self.on_trade_callbacks.append(callback)
 
     def _on_trade(self, trade):
-        if callable(self.on_trade_callback):
-            if inspect.iscoroutinefunction(self.on_trade_callback):
-                self.loop.create_task(self.on_trade_callback(trade))
-            else:
-                self.on_trade_callback(trade)
+        for callback in self.on_trade_callbacks:
+            if callable(callback):
+                if inspect.iscoroutinefunction(callback):
+                    self.loop.create_task(callback(trade))
+                else:
+                    callback(trade)
+
+    def on_heartbeat(self, callback):
+        self.on_heartbeat_callbacks.append(callback)
+
+    def _on_heartbeat(self, msg):
+        for callback in self.on_heartbeat_callbacks:
+            if callable(callback):
+                if inspect.iscoroutinefunction(callback):
+                    self.loop.create_task(callback(msg))
+                else:
+                    callback(msg)
 
     def is_connected(self):
         # Haven't consumed yet
@@ -278,9 +292,6 @@ class BaseConsumer:
         )
 
 
-    def on_heartbeat(self, msg):
-        raise NotImplementedError('must implement it')
-
     def process_message(self, message):
         """
         This should take a json string and return a dict
@@ -290,10 +301,18 @@ class BaseConsumer:
         raise NotImplementedError('must implement it')
 
     def make_subscribe_payload(self):
-        # subscribe_msg = copy.deepcopy(SUBSCRIBE_MSG)
-        # subscribe_msg['product_ids'] = self.product_ids
+        """
+        This should return a json dict with the format
+        of the subscribe message to be sent directly
+        to the exchange
+        """
         raise NotImplementedError('must implement it')
 
     def make_heartbeat_payload(self):
-        # return HEARTBEAT_MSG
+        """
+        This should return a json dict with the format
+        of the heartbeat message to be sent directly
+        to the exchange.
+        NOTE: This is only sent if self.enable_heartbeat is True
+        """
         raise NotImplementedError('must implement it')

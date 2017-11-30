@@ -37,17 +37,6 @@ class PoloniexConsumer(BaseConsumer):
         super().__init__(*args, **kwargs)
         self.wamp = WAMPClient(self.url)
 
-    def _on_trade(self, trade):
-        super()._on_trade(trade)
-        icon = '📈' if trade.side == 'sell' else '📉'
-        logger.info('%s :: %s :: %s %s%s   %s %s', self.product_ids,
-                    trade.product_id, trade.size,
-                    trade.price, icon, trade.trade_id, trade.time)
-
-    def on_heartbeat(self, message):
-        logger.info('%s :: heartbeat :: %s %s', self.product_ids,
-                    message.last_trade_id, message.time)
-
     def process_message(self, messages, product_id=None):
         rv = []
         for msg in messages:
@@ -73,12 +62,13 @@ class PoloniexConsumer(BaseConsumer):
 
 
     async def on_welcome(self):
-        logger.info('wamp start on welcome')
+        logger.info('%s wamp start on welcome', self.consumer_id)
         await self.spawn_keepalive()
 
     async def consume(self):
         if self.terminated:
-            logger.trace('Termination requested. not consuming')
+            logger.info('%s Termination requested. not consuming',
+                        self.consumer_id)
             return
 
         session = aiohttp.ClientSession()
@@ -92,7 +82,7 @@ class PoloniexConsumer(BaseConsumer):
         self.wamp.on_welcome(self.on_welcome)
 
         try:
-            logger.info('starting wamp session')
+            logger.info('%s starting wamp session', self.consumer_id)
             await self.wamp.start(session)
         except CancelledError:
             raise

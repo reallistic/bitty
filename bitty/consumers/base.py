@@ -132,8 +132,12 @@ class BaseConsumer:
             self.consumer.remove_done_callback(self.on_consume_end)
             self.consumer.cancel()
 
-        logger.info('%s : reconnecting.... closing ws', self.exchange_name)
-        await self.ws.close()
+        if self.ws:
+            await self.ws.close()
+            ws_msg = 'closing ws'
+        else:
+            ws_msg = 'ws never opened'
+        logger.info('%s : reconnecting.... %s', self.exchange_name, ws_msg)
         self.spawn_consumer()
 
     def on_consume_end(self, task):
@@ -150,19 +154,24 @@ class BaseConsumer:
 
     async def consume(self):
         if self.terminated:
-            logger.debug('%s : Termination requested. not consuming',
+            logger.info('%s : Termination requested. not consuming',
                          self.exchange_name)
             return
 
+        session = aiohttp.ClientSession()
         try:
-            session = aiohttp.ClientSession()
+            logger.info('%s : ws_connect %s', self.exchange_name, self.url)
             async with session.ws_connect(self.url) as ws:
                 self.ws = ws
+
+                logger.info('%s : ws connection active, sending subscribe',
+                            self.exchange_name)
+
                 await self.subscribe()
                 await self.spawn_keepalive()
+                logger.info('%s : consuming %s', self.product_ids,
+                            self.exchange_name)
                 try:
-                    logger.info('%s : consuming %s', self.product_ids,
-                                self.exchange_name)
                     error_data = await self._consume()
                 finally:
                     await self.ws.close()

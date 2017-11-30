@@ -25,6 +25,7 @@ class BaseConsumer:
     consumer = None
     on_trade_callback = None
     exhange_name = ''
+    ws = None
 
     def __init__(self, product_ids, url=None, loop=None):
         self.product_ids = product_ids
@@ -111,6 +112,15 @@ class BaseConsumer:
         self.terminated = True
         if self.ws:
             await self.ws.close()
+
+        if self.keepalive:
+            self.keepalive.cancel()
+        if self.trade_keepalive:
+            self.trade_keepalive.cancel()
+
+        if self.consumer:
+            self.consumer.remove_done_callback(self.on_consume_end)
+            self.consumer.cancel()
 
     async def reconnect(self, *, kill_keepalive=True, kill_consumer=True):
         if kill_keepalive and self.keepalive:

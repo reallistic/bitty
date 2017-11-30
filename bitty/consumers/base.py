@@ -38,12 +38,20 @@ class BaseConsumer:
         if self.url is None:
             raise RuntimeError('need url for consumer %s' % self.__class__.__name__)
 
+    @property
+    def consumer_id(self):
+        if len(self.product_ids) == 1:
+            product_ids = self.product_ids[0]
+        else:
+            product_ids = self.product_ids
+        return '%s | %s' % (self.exchange_name, product_ids)
+
     async def subscribe(self):
         subscribe_msg = self.make_subscribe_payload()
         await self.send_message(subscribe_msg)
 
     async def send_message(self, msg):
-        logger.info('%s : sending message %s', self.exchange_name, msg)
+        logger.info('%s : sending message %s', self.consumer_id, msg)
         await self.ws.send_json(msg, dumps=json_dumps)
 
     def spawn_consumer(self):
@@ -51,8 +59,7 @@ class BaseConsumer:
         self.consumer.add_done_callback(self.on_consume_end)
 
     async def spawn_keepalive(self):
-        logger.info('%s : spawning keepalive %s', self.exchange_name,
-                    self.product_ids)
+        logger.info('%s : spawning keepalive', self.consumer_id)
         self.trade_keepalive = self.loop.create_task(self._keepalive('trade'))
 
         if self.enable_heartbeat:
@@ -73,7 +80,7 @@ class BaseConsumer:
             await asyncio.sleep(max_time_allowed, loop=self.loop)
             if self.terminated:
                 logger.debug('%s : termination requested. ending keep alive',
-                             self.exchange_name)
+                             self.consumer_id)
                 break
             cur_time = time.time()
             time_elapsed = cur_time - self.last_heartbeat[ka_type]
@@ -92,20 +99,19 @@ class BaseConsumer:
                     missed_heartbeat = False
 
             if missed_heartbeat:
-                logger.warning('%s : %s :: %s missed heartbeat after %s '
+                logger.warning('%s :: %s missed heartbeat after %s '
                                'secs (max is %s)',
-                               self.exchange_name, self.product_ids, ka_type,
-                               time_elapsed, max_time_allowed)
+                               self.consumer_id, ka_type, time_elapsed,
+                               max_time_allowed)
                 self.loop.create_task(self.reconnect())
                 break
             else:
-                logger.debug('%s : %s :: %s satisfied heartbeat after %s secs',
-                             self.exchange_name, self.product_ids, ka_type,
-                             time_elapsed)
+                logger.debug('%s :: %s satisfied heartbeat after %s secs',
+                             self.consumer_id, ka_type, time_elapsed)
 
     async def kill(self):
         logger.warning('%s : requested consumer kill. Terminating app',
-                       self.exchange_name)
+                       self.consumer_id)
         if self.terminated:
             return
 
@@ -137,54 +143,53 @@ class BaseConsumer:
             ws_msg = 'closing ws'
         else:
             ws_msg = 'ws never opened'
-        logger.info('%s : reconnecting.... %s', self.exchange_name, ws_msg)
+        logger.info('%s : reconnecting.... %s', self.consumer_id, ws_msg)
         self.spawn_consumer()
 
     def on_consume_end(self, task):
         if task is not self.consumer:
             logger.warning('%s : got wrong task on consume end',
-                           self.exchange_name)
+                           self.consumer_id)
         if not task.cancelled():
             exc = task.exception()
             if exc:
                 logger.error('%s : consume had an error %s', exc,
-                             self.exchange_name, exc_info=sys.exc_info())
+                             self.consumer_id, exc_info=sys.exc_info())
             if not self.terminated:
                 self.loop.create_task(self.reconnect())
 
     async def consume(self):
         if self.terminated:
             logger.info('%s : Termination requested. not consuming',
-                         self.exchange_name)
+                         self.consumer_id)
             return
 
         session = aiohttp.ClientSession()
         try:
-            logger.info('%s : ws_connect %s', self.exchange_name, self.url)
+            logger.info('%s : ws_connect %s', self.consumer_id, self.url)
             async with session.ws_connect(self.url) as ws:
                 self.ws = ws
 
                 logger.info('%s : ws connection active, sending subscribe',
-                            self.exchange_name)
+                            self.consumer_id)
 
                 await self.subscribe()
                 await self.spawn_keepalive()
-                logger.info('%s : consuming %s', self.product_ids,
-                            self.exchange_name)
+                logger.info('%s : consuming', self.consumer_id)
                 try:
                     error_data = await self._consume()
                 finally:
                     await self.ws.close()
 
                 logger.warning('%s : consume ended; ws closed',
-                               self.exchange_name)
+                               self.consumer_id)
 
                 if not self.terminated and error_data is not None:
-                    logger.error('%s : %s', self.exchange_name, error_data)
+                    logger.error('%s : %s', self.consumer_id, error_data)
         except CancelledError:
             raise
         except:  # pylint:disable=bare-except
-            logger.exception('%s : Consume failed', self.exchange_name)
+            logger.exception('%s : Consume failed', self.consumer_id)
         finally:
             session.close()
 
@@ -199,7 +204,7 @@ class BaseConsumer:
             error_data = msg.data
             if msg.type == aiohttp.WSMsgType.TEXT:
                 if msg.data == 'close cmd':
-                    logger.warning('%s : close cmd', self.exchange_name)
+                    logger.warning('%s : close cmd', self.consumer_id)
                     break
 
                 error_data = None
@@ -207,13 +212,13 @@ class BaseConsumer:
                     self.on_message(msg.data)
                 except:  # pylint: disable=bare-except
                     logger.exception('%s ws on_message had an error',
-                                     self.exchange_name)
+                                     self.consumer_id)
 
             elif msg.type == aiohttp.WSMsgType.CLOSED:
-                logger.warning('%s : closed', self.exchange_name)
+                logger.warning('%s : closed', self.consumer_id)
                 break
             elif msg.type == aiohttp.WSMsgType.ERROR:
-                logger.warning('%s : error', self.exchange_name)
+                logger.warning('%s : error', self.consumer_id)
                 break
         return error_data
 
@@ -229,7 +234,7 @@ class BaseConsumer:
             msg_type = msg_data.get('type')
             if msg_type == 'error':
                 logger.warning('%s : dropping message %s',
-                               self.exchange_name, msg_data)
+                               self.consumer_id, msg_data)
                 return
             msg_data.setdefault('exchange_name', self.exchange_name)
 

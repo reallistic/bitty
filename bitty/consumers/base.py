@@ -17,14 +17,22 @@ logger = logging.getLogger(__name__)
 
 
 class BaseConsumer:
-    enable_heartbeat = False
-    url = None
     terminated = False
     keepalive = None
     trade_keepalive = None
     consumer = None
-    exhange_name = ''
     ws = None
+
+    ###
+    ## Per consumer overrides
+    ###
+    url = None
+    exchange_name = ''
+    enable_heartbeat = False
+
+    # Keep alive timeouts in Seconds
+    heartbeat_timeout = 2
+    trade_timeout = 70
 
     def __init__(self, product_ids, url=None, loop=None):
         self.product_ids = product_ids
@@ -66,7 +74,8 @@ class BaseConsumer:
 
         if self.enable_heartbeat:
             heartbeat_msg = self.make_heartbeat_payload()
-            await self.send_message(heartbeat_msg)
+            if heartbeat_msg is not None:
+                await self.send_message(heartbeat_msg)
             self.keepalive = self.loop.create_task(self._keepalive('heartbeat'))
 
     def collect_heartbeat(self, hb_type, trade_id):
@@ -76,7 +85,12 @@ class BaseConsumer:
     async def _keepalive(self, ka_type):
         self.last_heartbeat[ka_type] = time.time()
 
-        max_time_allowed = 2 if ka_type == 'heartbeat' else 70  # Seconds
+        if ka_type == 'heartbeat':
+            other_ka_type = 'trade'
+            max_time_allowed = self.heartbeat_timeout
+        else:
+            other_ka_type = 'heartbeat'
+            max_time_allowed = self.trade_timeout
 
         while True:
             await asyncio.sleep(max_time_allowed, loop=self.loop)
@@ -86,24 +100,30 @@ class BaseConsumer:
                 break
             cur_time = time.time()
             time_elapsed = cur_time - self.last_heartbeat[ka_type]
+            other_time_elapsed = cur_time - self.last_heartbeat[other_ka_type]
 
             missed_heartbeat = time_elapsed > max_time_allowed
+            made_other_hb = other_time_elapsed < max_time_allowed
             # if this is a trade check and
             # the last trade id reported by the 'heartbeat' ws msg
             # is the same as the last trade we saw on the ws
             # dont mark the trade heartbeat missed if we haven't had
-            # one in over 70 secs
+            # one within the timeout period.
             if self.enable_heartbeat:
                 last_trade = self.last_heartbeat.get('trade_trade')
                 last_heartbeat_trade = self.last_heartbeat.get('heartbeat_trade')
                 has_last_trade = last_trade == last_heartbeat_trade
                 if ka_type == 'trade' and has_last_trade and missed_heartbeat:
                     missed_heartbeat = False
+                elif ka_type == 'heartbeat' and made_other_hb:
+                    missed_heartbeat = False
 
             if missed_heartbeat:
                 logger.warning('%s :: %s missed heartbeat after %s '
-                               'secs (max is %s)',
-                               self.consumer_id, ka_type, time_elapsed,
+                               'secs and %s secs (max is %s)',
+                               self.consumer_id, ka_type,
+                               round(time_elapsed, 2),
+                               round(other_time_elapsed, 2),
                                max_time_allowed)
                 self.loop.create_task(self.reconnect())
                 break
@@ -313,6 +333,8 @@ class BaseConsumer:
         This should return a json dict with the format
         of the heartbeat message to be sent directly
         to the exchange.
-        NOTE: This is only sent if self.enable_heartbeat is True
+        Return None if a message does not need to be sent
+        in order to receive heartbeat messages from the ws.
+        NOTE: This is only called if enable_heartbeat is True.
         """
         raise NotImplementedError('must implement it')

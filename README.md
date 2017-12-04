@@ -28,8 +28,10 @@ for example:
 class MyFancyExchangeConsumer(BaseConsumer):
 
     url = 'websocket url'
-    enable_heartbeat = False # True if this exchange supports heartbeat messages
+    enable_heartbeat = False # Set to true if this exchange supports heartbeat messages
     exchange_name = 'MyFancyExchange' # Used for logging and callbacks
+    heartbeat_timeout = 2 # how many seconds to allow in between heartbeats
+    trade_timeout = 70 # How many seconds to allow in between trades
 
     def _on_trade(self, trade):
         # Call super so callbacks get called
@@ -53,6 +55,9 @@ class MyFancyExchangeConsumer(BaseConsumer):
 
     def make_heartbeat_payload(self):
         # This will be sent directly to the websocket to subscribe for heartbeats
+        Return None if a message does not need to be sent
+        in order to receive heartbeat messages from the ws.
+        NOTE: This is only called if enable_heartbeat is True.
         pass
 ```
 

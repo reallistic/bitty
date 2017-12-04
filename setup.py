@@ -20,7 +20,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 setup(
     name='bitty',
 
-    version='0.0.1',
+    version='0.0.2',
 
     description='Collect Crypto info',
     long_description=long_description,
@@ -52,7 +52,7 @@ setup(
 
     packages=find_packages(),
 
-    install_requires=['ujson', 'aiohttp', 'autobahn'],
+    install_requires=['ujson', 'aiohttp', 'autobahn', 'pytz'],
 
     extras_require={
         'dev': [],

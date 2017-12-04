@@ -7,7 +7,8 @@ import sys
 from functools import partial
 from concurrent.futures import CancelledError
 from bitty.consumers.base import BaseConsumer
-from bitty.consumers.wamp import WAMPClient
+
+from bitty import utils
 
 
 json_loads = ujson.loads  # pylint: disable=no-member
@@ -17,39 +18,86 @@ logger = logging.getLogger(__name__)
 
 
 SUBSCRIBE_MSG = {
-    'type': 'subscribe',
-    'product_ids': [
-        'BTC-USD',
-        'ETH-USD',
-        'ETH-BTC',
-        'LTC-USD',
-        'LTC-BTC'
-   ]
+    'channel': 'USDT_BTC',
+    'command': 'subscribe'
 }
 
 
 class PoloniexConsumer(BaseConsumer):
-    enable_heartbeat = False
-    url = 'wss://api.poloniex.com'
-    exchange_name = 'Poloniex'
+    enable_heartbeat = True
+    url = 'wss://api2.poloniex.com'
+    exchange_name = 'poloniex'
+    market_channel = None
+    heartbeat_timeout = 15
+    trade_timeout = 70
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.wamp = WAMPClient(self.url)
+    def process_message(self, message, product_id=None):
+        """
+        Processes messages and returns a list of trade and/or
+        heartbeat models.
+        Poloniex sends back a integer identifier for each message
+        type. They aren't documented on the api site so I pulled
+        them from the javascript implementation of the polo UI.
 
-    def process_message(self, messages, product_id=None):
+        1000: messages about the logged in user's balance and real time orders
+        1001: trolbox events
+        1002: ticker events
+        1003: server stats like current time, users online, etc
+        1010: heartbeat
+        2000: alerts (?) including "cancelOrder" and "cancelTriggerOrder"
+        1-999: market specific data such as order book changes and trades
+        """
+
+        msg = json_loads(message)
         rv = []
+
+        msg_iden = msg[0] if isinstance(msg, list) else None
+
+        if not isinstance(msg_iden, int):
+            logger.info('%s : weird msg %s', self.consumer_id, msg)
+            return None
+
+        # The first message or so should be an information message
+        # that tells us what the `msg_iden` will be for trade updates.
+        # It also gives us the full current order book.
+        # NOTE: The below logic is basically copied from:
+        #   https://poloniex.com/js/plx_exchage.js?v=081217
+        if msg_iden > 0 and msg_iden < 1000:
+            if msg[2][0][0] == 'i':
+                market_info = msg[2][0][1]
+                if market_info.get('currencyPair') not in self.product_ids:
+                    logger.warning('%s got market info for wrong pair %s',
+                                   self.consumer_id, market_info)
+                    return None
+                order_book = market_info.pop('orderBook')
+                self.market_channel = msg_iden
+                return None
+
+        if msg_iden == 1010:
+            rv.append({
+                'type': 'heartbeat',
+                'product_id': self.product_ids[0],
+                'time': utils.get_iso8601(),
+                'last_trade_id': None
+            })
+            return rv
+
+        if msg_iden == self.market_channel: # Order book or trade
+            seq = msg[1]
+            messages = msg[2]
+
         for msg in messages:
-            if msg.get('type') == 'newTrade':
+            msg_type = msg[0]
+            if msg_type == 't': # Trade
                 rv.append({
                     'type': 'trade',
-                    'price': msg.get('data').get('rate'),
-                    'product_id': product_id,
-                    'side': msg.get('data').get('type'),
-                    'time': msg.get('data').get('date'),
-                    'sequence': 0,
-                    'size': msg.get('data').get('amount'),
-                    'trade_id': msg.get('data').get('tradeID')
+                    'price': msg[3],
+                    'product_id': self.product_ids[0],
+                    'side': 'buy' if msg[2] else 'sell',
+                    'time': utils.iso8601_from_secs(msg[5]),
+                    'sequence': seq,
+                    'size': msg[4],
+                    'trade_id': msg[1]
                 })
         if rv:
             return rv
@@ -57,60 +105,8 @@ class PoloniexConsumer(BaseConsumer):
 
     def make_subscribe_payload(self):
         subscribe_msg = copy.deepcopy(SUBSCRIBE_MSG)
-        subscribe_msg['product_ids'] = self.product_ids
+        subscribe_msg['channel'] = self.product_ids[0]
         return subscribe_msg
 
-
-    async def on_welcome(self):
-        logger.info('%s wamp start on welcome', self.consumer_id)
-        await self.spawn_keepalive()
-
-    async def consume(self):
-        if self.terminated:
-            logger.info('%s Termination requested. not consuming',
-                        self.consumer_id)
-            return
-
-        session = aiohttp.ClientSession()
-
-        for product_id in self.product_ids:
-            self.wamp.subscribe(
-                partial(self.on_message, product_id=product_id),
-                product_id
-            )
-
-        self.wamp.on_welcome(self.on_welcome)
-
-        try:
-            logger.info('%s starting wamp session', self.consumer_id)
-            await self.wamp.start(session)
-        except CancelledError:
-            raise
-        except:  # pylint:disable=bare-except
-            logger.exception('Consume failed')
-        finally:
-            session.close()
-
-    async def kill(self):
-        logger.warning('requested consumer kill. Terminating app')
-        if self.terminated:
-            return
-
-        self.terminated = True
-        if self.wamp:
-            await self.wamp.stop()
-
-    async def reconnect(self, *, kill_keepalive=True, kill_consumer=True):
-        if kill_keepalive and self.keepalive:
-            self.keepalive.cancel()
-        if kill_keepalive and self.trade_keepalive:
-            self.trade_keepalive.cancel()
-
-        if kill_consumer and self.consumer:
-            self.consumer.remove_done_callback(self.on_consume_end)
-            self.consumer.cancel()
-
-        logger.info('reconnecting.... closing ws')
-        if self.wamp:
-            await self.wamp.stop()
-        self.spawn_consumer()
+    def make_heartbeat_payload(self):
+        return None

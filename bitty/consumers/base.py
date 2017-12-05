@@ -138,7 +138,7 @@ class BaseConsumer:
             return
 
         self.terminated = True
-        if self.ws:
+        if self.ws and not self.ws.closed:
             await self.ws.close()
 
         if self.keepalive:

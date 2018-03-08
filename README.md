@@ -62,6 +62,8 @@ class MyFancyExchangeConsumer(BaseConsumer):
 ```
 
 Callbacks can be added as well:
+
+```
 def foo(trade):
     pass
 
